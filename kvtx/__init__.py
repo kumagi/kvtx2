@@ -14,10 +14,8 @@ class MemcacheClientModified(Client):
     if not isinstance(result, bool):
       raise ConnectionError
     return result
-  def gets(self, key):
+  def gets(self, key): # it never raise
     result = Client.gets(self,key)
-    if not isinstance(result, bool):
-      raise ConnectionError
     return result
   def cas(self, key, value):
     result = Client.cas(self, key, value)
@@ -74,9 +72,7 @@ class MemTr(object):
       length += self.mc.random.randint(0, 10) == 0
   def __init__(self, client):
     self.mc = client
-    self.lock_table = '@lk:'
-    self.backup_table = '@backup:'
-    self.status_table = '@status:'
+    self.status_table = 'status:'
   def begin(self):
     self.transaction_status = self.add_random(self.status_table, status_active)
     self.cache = {}
@@ -102,8 +98,9 @@ class MemTr(object):
     while True:
       try:
         value, owner = self.mc.gets(key)
-      except TypeError,e:
-        result = self.add(key, [value, self.transaction_status])
+      except (ValueError,TypeError):
+        print self.mc.get(key)
+        result = self.mc.add(key, [value, self.transaction_status])
         if result == False:
           continue
         self.cache[key] = value
@@ -120,9 +117,11 @@ class MemTr(object):
           result = self.mc.cas(key, [value, self.transaction_status])
           if result == False:
             continue
+          self.cache[key] = value
           return
         else: # in case of active, resolve
           result = resolve(other_status)
+          print "robiing:",result
           if result == True: # robbing success
             old_value = self.mc.get(self.backup_table + key)
             if old_value != None:
@@ -131,7 +130,6 @@ class MemTr(object):
               continue
             else: # robbing success, delete backup
               self.mc.delete(self.backup_table + key)
-            
   def get_repeatable(self, key):
     pass
 
@@ -154,9 +152,10 @@ if __name__ == '__main__':
     s('counter',0)
   def incr(setter, getter):
     d = getter('counter')
-    #print "counter:",d
+    print "counter:",d
     setter('counter', d + 1)
   result = rr_transaction(mc, init)
+  print result
   assert(result['counter'] == 0)
   for i in range(10000):
     result = rr_transaction(mc, incr)
