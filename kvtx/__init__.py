@@ -19,6 +19,11 @@ class MemcacheClientModified(Client):
     if not isinstance(result, bool):
       raise ConnectionError
     return result
+  def cas(self, key, value):
+    result = Client.cas(self, key, value)
+    if not isinstance(result, bool):
+      raise ConnectionError
+    return result
 
 status_committed = 'committed'
 status_abort  = 'abort'
