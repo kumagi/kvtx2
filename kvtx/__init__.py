@@ -1,246 +1,214 @@
-import memcache
+# -*- coding: utf-8 -*-
 import time
-import pylru
+from time import sleep
 from random import Random
 from random import randint
+import memcache
 import sys
 
 class AbortException(Exception):
   pass
 class ConnectionError(Exception):
   pass
-class ActiveException(Exception):
-  pass
 
-"""
-from memcache import Client
-class MemcacheClientModified(Client):
-  def add(self, key, value):
-    result = Client.add(self,key,value)
-    if not isinstance(result, bool):
-      raise ConnectionError
-    return result
-  def gets(self, key): # it never raise
-    result = Client.gets(self,key)
-    return result
-  def cas(self, key, value):
-    result = Client.cas(self, key, value)
-    if not isinstance(result, bool):
-      raise ConnectionError
-    return result
-"""
+COMMITTED = 'committed'
+ABORT = 'abort'
+ACTIVE = 'active'
+
+DIRECT = 'direct'
+INDIRECT = 'indirect'
+
 def get_committed_value(old, new, status):
-  if status == 'committed':
+  if status == COMMITTED:
     return new
-  elif status == 'abort':
+  elif status == ABORT or status == ACTIVE:
     return old
-  elif status == 'active':
-    raise ActiveException
   else:
     raise Exception('invalid status' + status)
+
 def read_committed(old, new, status):
-  if status == 'committed':
+  if status == COMMITTED:
     return new, old
-  elif status == 'abort' or status == 'active':
+  elif status == ABORT or status == ACTIVE:
     return old, new
   else:
-    raise Exception('invalid status' + str(status))
+    raise Exception('invalid status' + status)
 def read_repeatable(old, new, status):
-  if status == 'committed':
+  if status == COMMITTED:
     return new,old
-  elif status == 'abort':
+  elif status == ABORT:
     return old,new
-  elif status == 'active':
+  elif status == ACTIVE:
     return None
   else:
     raise Exception('invalid status' + status)
-
-status_committed = 'committed'
-status_abort  = 'abort'
-status_active = 'active'
+def async_delete(client, target):
+  client.delete(target)
 
 class WrappedClient(object):
   def __init__(self, *args):
-    self.mc = memcache.Client(*args) #, behaviors={"cas":True})
+    from memcache import Client
+    self.mc = Client(*args, cache_cas = True)
     self.del_que = []
     self.random = Random()
     self.random.seed()
-    self.unique = pylru.lrucache(1000)
     from threading import Thread
     self.del_thread = Thread(target = lambda:self._async_delete())
     self.del_thread.setDaemon(True)
     self.del_thread.start()
-  def gets(self,key):
-    result = unique = None
-    while True:
-      try:
-        result_tuple = self.mc.gets(key)
-      except RuntimeError:
-        time.sleep(0.1)
-        continue
-      break
-    self.unique[key] = unique
-    return result
-  def cas(self,key, value):
-    try:
-      result = self.mc.cas(key, value, self.unique[key])
-    except KeyError:
-      return False # false negative intentionally
-    del self.unique[key]
-    return result
   def __getattr__(self, attrname):
     return getattr(self.mc, attrname)
   def _async_delete(self):
     while True:
       try:
-	time.sleep(5)
-	while 0 < len(self.del_que):
-	  target = self.del_que.pop(0)
-	  if target != None:
-	    print 'deleting:' + target
-	    self.mc.delete(target)
+        sleep(5)
+        while 0 < len(self.del_que):
+          target = self.del_que.pop(0)
+          if target != None:
+            self.mc.delete(target)
       except Exception, e:
-	print e
-	exit()
+        print e
   def add_del_que(self,target):
     self.del_que.append(target)
 
 class MemTr(object):
-  def _random_string(self, length):
+  """ transaction on memcached """
+  def _random_string(self,length):
     string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
     ans = ''
     for i in range(length):
       ans += string[self.mc.random.randint(0, len(string) - 1)]
     return ans
-  def add_random(self,prefix, value):
+  def fetch_by_need(self, key_tuple):
+    if key_tuple[0] == DIRECT:
+      return key_tuple[1]
+    elif key_tuple[0] == INDIRECT:
+      return self.mc.get(key_tuple[1])
+    else:
+      raise Exception("invalid tuple " + str(key_tuple))
+  def add_random(self, value):
     length = 8
     while 1:
-      key = prefix + self._random_string(length)
+      key = self.prefix + self._random_string(length)
       result = self.mc.add(key, value)
-      if not isinstance(result, bool): # network fail
-	time.sleep(0.01)
-	continue
       if result == True:
-	return key
+        return key
+      if not isinstance(result, bool):
+        raise ConnectionError
       length += self.mc.random.randint(0, 10) == 0
   def __init__(self, client):
+    self.prefix = 'MTP:'
     self.mc = client
-    self.status_table = 'status:'
   def begin(self):
-    self.transaction_status = self.add_random(self.status_table, status_active)
-    self.cache = {}
+    self.transaction_status = self.add_random(ACTIVE)
     self.readset = {}
+    self.writeset = {}
   def commit(self):
     status = self.mc.gets(self.transaction_status)
-    if status != 'active': raise AbortException
-
-    # validate readset
-    for k, v in self.readset.iteritems():
-      old, new, owner = self.mc.get(k)
-      status = mc.get(owner)
-      if v != read_committed(old, new, status):
-	return False
- 
-    # commit
-    return self.mc.cas(self.transaction_status, status_committed)
-  def set(self, key, value):
-    resolver = self.resolver(self.mc)
-    self.cache[key] = value
-    while True:
-      try:
-	old, new, owner = self.mc.gets(key)
-      except (ValueError,TypeError):
-	print "notfnound!!"
-	result = self.mc.add(key, [None, value, self.transaction_status])
-	if result == False:
-	  print "false!"
-	  try:
-	    a,b,c = self.mc.get(key)
-	    print "abc: ", a,",", b,",", c
-	  except (ValueError,TypeError):
-	    print "set"
-	    self.mc.set(key, [None, value, self.transaction_status])
-	    print "set_done:",self.mc.get(key)
-	    return
-	  time.sleep(1)
-	  continue
-	print "set done"
-	return
-      if owner == self.transaction_status: # I already own it
-	result = self.mc.cas(key, [None, value, self.transaction_status])
-	if result == False:
-	  raise AbortException
-	return
-      else: # other transaction has the value
-	other_status = self.mc.gets(owner)
-	if self.readset.has_key(key):
-	  if get_committed_value(old, new, other_status) != self.readset[key]:
-            raise AbortException
-          else:
-            del self.readset[key]
-	if other_status != status_active:
-	  committed_value = get_committed_value(old, new, other_status)
-	  result = self.mc.cas(key, [committed_value, value, self.transaction_status])
-	  if result == False:
-	    continue
-	  return
-	else: # in case of active, resolve
-	  result = resolver(owner)
-	  if result == True: # robbing success
-	    result = self.mc.cas(key, [old, self.transaction_status])
-	    if result == False: # in case of rollback's failure, retry
-	      continue
-  def get_repeatable(self, key):
-    resolver = self.resolver(self.mc)
-    while 1:
-      old = new = status_name = None
-      try:
-	#print "get:",self.mc.gets(key)
-	old, new, status_name = self.mc.gets(key)
-      except ValueError:
-        print self.mc.gets(key)
-        exit
-      except (TypeError,):
-	#print "typeerror"
-	return None  # read repeatable!!
-      if status_name == self.transaction_status: # already have
-	#print 'cache hit'
-	return self.cache[key]
-	#return self.mc.get(new)
-      elif self.readset.has_key(key): # robbed by other, abort
-	raise AbortException
-      else:
-	state = self.mc.gets(status_name)
-	committed_value = read_committed(old, new, state)
-	self.readset[key] = committed_value
-	self.cache = committed_value
-	return committed_value
+    if status != ACTIVE: raise AbortException
+    if self.mc.cas(self.transaction_status, COMMITTED):
+      # merge readset and writeset
+      cache = {}
+      for k, v in self.readset.items():
+        cache[k] = v[0]
+      for k, v in self.writeset.items():
+        cache[k] = v
+      return cache
+    else:
+      return None
   class resolver(object):
     def __init__(self, mc):
       self.count = 10
       self.mc = mc
     def __call__(self, other_status):
-      time.sleep(0.01 * randint(0, 1 << self.count))
-      if self.count <= 10:
-	self.count += 1
-	return False
+      sleep(0.001 * randint(0, 1 << self.count))
+      if self.count <= 1:
+        self.count += 1
       else:
-	self.count = 0
-	print 'cas: ', other_status, '-> abort'
-	return self.mc.cas(other_status, 'abort')
+        v = self.mc.gets(other_status)
+        if v == COMMITTED: return
+        self.count = 0
+        self.mc.cas(other_status, ABORT)
+  def set(self, key, value):
+    resolver = self.resolver(self.mc)
+    while 1:
+      try:
+        #print "set:",self.mc.gets(key)
+        old, new, owner = self.mc.gets(key)
+      except TypeError:
+        if self.mc.add(key,[None, [DIRECT,value], self.transaction_status]):
+          self.writeset[key] = value
+          break
+        time.sleep(1)
+        continue
+      except ValueError:
+        pass
+      if owner == self.transaction_status:
+        assert(self.writeset.has_key(key))
+        if self.mc.get(self.transaction_status) != ACTIVE:
+          raise AbortException
+        if self.mc.cas(key, [old, [DIRECT,value], self.transaction_status]):
+          self.writeset[key] = value
+          return
+        else:
+          raise AbortException
+      else:
+        state = self.mc.gets(owner)
+        if(state == ACTIVE):
+          resolver(owner)
+          continue
+        next_old = get_committed_value(old, new, state)
+        if self.writeset.has_key(key):
+          raise AbortException
+        # delete from readset
+        if self.readset.has_key(key):
+          fetched_value = self.fetch_by_need(next_old)
+          if self.readset[key] != [fetched_value, owner, state]:
+            raise AbortException
+        result = self.mc.cas(key,[next_old, [DIRECT, value], self.transaction_status])
+        if result == True:
+          # inheriting success
+          self.readset.pop(key, None)
+          self.writeset[key] = value
+          return
+  def get(self, key):
+    if self.writeset.has_key(key):
+      return self.writeset[key]
+    if self.readset.has_key(key):
+      return self.readset[key]
+    while 1:
+      try:
+        old, new, owner = self.mc.gets(key)
+      except TypeError:
+        self.readset[key] = None
+        return None
+      if owner == self.transaction_status:
+        assert(self.writeset.has_key(key))
+        return self.writeset[key]
+      elif self.writeset.has_key(key):
+        raise AbortException
+      else:
+        state = self.mc.get(owner)
+        committed_value = get_committed_value(old, new, state)
+        result = self.fetch_by_need(committed_value)
+        self.readset[key] = [result, owner, state]
+        return result
 
 def rr_transaction(kvs, target_transaction):
   transaction = MemTr(kvs)
   setter = lambda k,v : transaction.set(k,v)
-  getter = lambda k   : transaction.get_repeatable(k)
+  getter = lambda k :   transaction.get(k)
   while(1):
     transaction.begin()
     try:
       target_transaction(setter, getter)
-      if transaction.commit() == True:
-	return transaction.cache
+      result = transaction.commit()
+      if result != None:
+        return result
     except AbortException:
       continue
+    except Exception, e:
+      sys.stderr.write("transaction killed " + str(e.message) + "\n")
 
 if __name__ == '__main__':
   mc = WrappedClient(['127.0.0.1:11211'])
@@ -248,11 +216,11 @@ if __name__ == '__main__':
     s('counter',0)
   def incr(setter, getter):
     d = getter('counter')
-    print "counter:",d
-    setter('counter', d + 1)
+    setter('counter', d+1)
   result = rr_transaction(mc, init)
-  assert(result['counter'] == 0)
+  from time import time
+  begin = time()
   for i in range(10000):
-    print i
     result = rr_transaction(mc, incr)
   print result['counter']
+  print str(10000 / (time() - begin)) + " qps"
