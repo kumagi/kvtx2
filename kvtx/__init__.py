@@ -118,7 +118,7 @@ class MemTr(object):
       return None
   class resolver(object):
     def __init__(self, mc):
-      self.count = 10
+      self.count = 5
       self.mc = mc
     def __call__(self, other_status):
       sleep(0.001 * randint(0, 1 << self.count))
@@ -127,19 +127,29 @@ class MemTr(object):
       else:
         v = self.mc.gets(other_status)
         if v == COMMITTED: return
-        self.count = 0
+        self.count = 10
         self.mc.cas(other_status, ABORT)
   def set(self, key, value):
     resolver = self.resolver(self.mc)
     while 1:
       try:
         #print "set:",self.mc.gets(key)
-        old, new, owner = self.mc.gets(key)
+        indirect_flag, locator_tuple = self.mc.gets(key)
+        if indirect_flag == True:
+          old, new, owner = locator_tuple
+        else: # quisine state
+          result = self.mc.cas(key, [True, [locator_tuple, value, self.transaction_status]])
+          if result == True:
+            self.writeset[key] = value
+            status_change = self.mc.cas(self.transaction_status, [self.transaction_status, self.writeset])
+            if status_change == False:
+              raise AbortException
+          return
       except TypeError:
-        if self.mc.add(key,[None, [DIRECT,value], self.transaction_status]):
+        if self.mc.add(key,[True,[None, [DIRECT,value], self.transaction_status]]):
           self.writeset[key] = value
           break
-        time.sleep(1)
+        time.sleep(0.5)
         continue
       except ValueError:
         pass
@@ -178,7 +188,12 @@ class MemTr(object):
       return self.readset[key]
     while 1:
       try:
-        old, new, owner = self.mc.gets(key)
+        indirect_flag, locator_tuple = self.mc.gets(key)
+        if indirect_flag == True:
+          old, new, owner = locator_tuple
+        else: # quisine state
+          self.readset = [locator_tuple, None, None]
+          return locator_tuple
       except TypeError:
         self.readset[key] = None
         return None
