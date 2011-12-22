@@ -145,17 +145,17 @@ class MemTr(object):
       if self.count <= 5:
         self.count += 1
       else:
-        sys.stderr.write("try rob:"+str(self.mc.get(other_status))+"\n")
+        #sys.stderr.write("try rob:"+str(self.mc.get(other_status))+"\n")
         try:
           status, ref_list = self.mc.gets(other_status)
         except TypeError:
           return
         if status == COMMITTED: return
         self.count = 10
-        sys.stderr.write("issue cas\n")
+        #sys.stderr.write("issue cas\n")
         rob_success = self.mc.cas(other_status, [ABORT, ref_list])
         if rob_success:
-          sys.stderr.write("robb done\n")
+          #sys.stderr.write("robb done\n")
           # deflate the inflated kvp
           for key in ref_list:
             try:
@@ -183,7 +183,7 @@ class MemTr(object):
     # start
     while 1:
       got_value = self.mc.gets(key)
-      sys.stderr.write("set:got_value:"+str(got_value)+" "+self.transaction_status+"\n")
+      #sys.stderr.write("set:got_value:"+str(got_value)+" "+self.transaction_status+"\n")
       if got_value == None: # not exist
         if self.mc.add(key, [INFLATE, None, [DIRECT,value], self.transaction_status]):
           self.writeset[key] = value
@@ -198,7 +198,7 @@ class MemTr(object):
         if self.readset.has_key(key):
           if self.readset[key][0] != got_value or self.readset[key][2] == ABORT:
             raise AbortException
-        sys.stderr.write("set:"+"key ok\n")
+        #sys.stderr.write("set:"+"key ok\n")
 
         result = self.mc.cas(key, [INFLATE, [DIRECT, got_value], [DIRECT, value], self.transaction_status])
         if result == True:
@@ -221,7 +221,7 @@ class MemTr(object):
         else: # other thread should rob
           raise AbortException
       else:
-        sys.stderr.write(str(self.transaction_status) + " != " + owner + "\n")
+        #sys.stderr.write(str(self.transaction_status) + " != " + owner + "\n")
         try:
           state, ref_list = self.mc.gets(owner)
         except TypeError: # other thread push to quisine state
@@ -252,7 +252,7 @@ class MemTr(object):
     while 1:
       try:
         got_value = self.mc.gets(key)
-        sys.stderr.write("get:got_value:"+str(got_value)+"\n")
+        #sys.stderr.write("get:got_value:"+str(got_value)+"\n")
         inflate, old, new, owner_name = got_value
         if inflate != INFLATE: # quisine state
           raise TypeError
@@ -285,7 +285,7 @@ def rr_transaction(kvs, target_transaction):
       if result != None:
         return result
     except AbortException:
-      sys.stderr.write("...aborted\n")
+      #sys.stderr.write("...aborted\n")
       continue
 
 if __name__ == '__main__':
