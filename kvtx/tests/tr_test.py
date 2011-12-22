@@ -29,7 +29,7 @@ def conflict_test():
   result = rr_transaction(mc, init)
   clients = []
   threads = []
-  num = 10
+  num = 40
   for i in range(num):
     clients.append(WrappedClient(["127.0.0.1:11211"])),
     threads.append(threading.Thread(target = lambda:rr_transaction(clients[i], add)))
