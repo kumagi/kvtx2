@@ -111,7 +111,8 @@ class MemTr(object):
     self.writeset = {}
     self.out("begin")
   def out(self,string):
-    sys.stderr.write(self.transaction_status + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+    #sys.stderr.write(self.transaction_status + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+    pass
   def commit(self):
     self.out("trycommit")
     try:
@@ -231,13 +232,16 @@ class MemTr(object):
         inflate, old, new, owner = got_value # load value
         if inflate != INFLATE: raise TypeError
         self.out("set:unpacked:"+str(got_value))
+      except ValueError:
+        sys.stderr.write("value error:"+str(got_value))
+        raise ValueError
       except TypeError: # deflate state
         if self.writeset.has_key(key):
           self.delete_by_need(tupled_new)
           raise AbortException
         if self.readset.has_key(key):
           if self.readset[key] != got_value:
-            self.out("expected:" + str(self.readset[key]) + " but:" + str(got_value))
+            self.out("expected:"+ key + " to be "+ str(self.readset[key]) + " but:" + str(got_value))
             self.delete_by_need(tupled_new)
             raise AbortException
         #self.out("set:"+"key ok\n")
@@ -289,7 +293,7 @@ class MemTr(object):
         except TypeError: # other thread push to deflate state
           try:
             inflate, _1, _2, second_owner_name = self.mc.gets(key)
-            if inflate == INFLATE and owner_name == second_owner_name: # killed owner inflated this
+            if inflate == INFLATE and owner == second_owner_name: # killed owner inflated this
               committed_value = get_committed_value(old, new, ABORT)
               self.delete_by_need(new)
               raw_value = self.fetch_by_need(old)
@@ -342,7 +346,7 @@ class MemTr(object):
       # get
       try:
         state, _ = self.mc.gets(owner_name) # ref_list will be ignored
-      except TypeError: # deleted? it may became deflated state
+      except TypeError: # status deleted? it may became deflated state
         try:
           inflate, _1, _2, second_owner_name = self.mc.gets(key)
           if inflate == INFLATE and owner_name == second_owner_name: # killed owner inflated this
@@ -362,6 +366,7 @@ class MemTr(object):
       if state == ACTIVE:
         resolver(owner_name)
       else:
+        raw_value = self.fetch_by_need(committed_value)
         if self.mc.cas(key, raw_value):
           self.out("get: deflate "+key +" for "+ str(raw_value))
           self.delete_by_need(old)
@@ -379,7 +384,7 @@ def rr_transaction(kvs, target_transaction):
       if result != None:
         return result
     except AbortException:
-      sys.stderr.write("...aborted\n")
+      #sys.stderr.write("...aborted\n")
       continue
 
 if __name__ == '__main__':

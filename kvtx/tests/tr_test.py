@@ -57,8 +57,8 @@ def double_read_test():
   result = rr_transaction(mc, read)
   assert(result["hoge"] == 21)
   assert(result["au"] == 3)
-def many_account_transaction_test():
-  accounts = 3
+def many_account_transaction_est():
+  accounts = 10
   first_money = 1000
   def init(setter,getter):
     for i in range(accounts):
@@ -80,20 +80,20 @@ def many_account_transaction_test():
       def move(setter,getter):
         from_money = getter("account:"+str(from_account))
         if from_money < money:
-          print "from_money:"+str(from_money)
+          #print "from_money:"+str(from_money)
           return
         to_money = getter("account:"+str(to_account))
         setter("account:"+str(from_account), from_money - money)
         setter("account:"+str(to_account), to_money + money)
       result = rr_transaction(mc, move)
-      sys.stderr.write(str(result["account:"+str(from_account)]))
+      #sys.stderr.write(str(result["account:"+str(from_account)]))
       assert(0 < result["account:"+str(from_account)])
 
       result = rr_transaction(mc, checker)
       total = 0
       for i in range(accounts):
         total += result["account:"+str(i)]
-      sys.stderr.write("middle result :"+str(total) + " expect " + str(accounts * first_money) + " in "+str(from_account)+"->"+str(to_account) + "dump"+str(result))
+      #sys.stderr.write("middle result :"+str(total) + " expect " + str(accounts * first_money) + " in "+str(from_account)+"->"+str(to_account) + "dump"+str(result))
       assert(total == accounts * first_money)
   clients = []
   threads = []
@@ -115,3 +115,15 @@ def many_account_transaction_test():
     total += result["account:"+str(i)]
   print "result :"+str(total) + " expect " + str(accounts * first_money)
   assert(total == accounts * first_money)
+
+def large_value_test():
+  def init(s,g):
+    s("long", "hoge"*100)
+  def two_write(s,g):
+    s("auaua", "hoge"*100)
+    s("auaua", "aua"*200)
+  mc = WrappedClient(["127.0.0.1:11211"])
+  result = rr_transaction(mc, init)
+  assert(result["long"] == "hoge"*100)
+  result = rr_transaction(mc, two_write)
+  assert(result["auaua"] == "aua"*200)
