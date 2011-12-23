@@ -57,8 +57,8 @@ def double_read_test():
   result = rr_transaction(mc, read)
   assert(result["hoge"] == 21)
   assert(result["au"] == 3)
-def many_account_transaction_est():
-  accounts = 10
+def many_account_transaction_test():
+  accounts = 100
   first_money = 1000
   def init(setter,getter):
     for i in range(accounts):
@@ -97,7 +97,7 @@ def many_account_transaction_est():
       assert(total == accounts * first_money)
   clients = []
   threads = []
-  num = 4
+  num = 10
   for i in range(num):
     clients.append(WrappedClient(["127.0.0.1:11211"]))
     threads.append(threading.Thread(target = lambda:work(clients[i])))

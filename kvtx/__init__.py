@@ -229,12 +229,10 @@ class MemTr(object):
         time.sleep(0.5)
         continue
       try:
+        if not isinstance(got_value, list): raise TypeError
         inflate, old, new, owner = got_value # load value
         if inflate != INFLATE: raise TypeError
         self.out("set:unpacked:"+str(got_value))
-      except ValueError:
-        sys.stderr.write("value error:"+str(got_value))
-        raise ValueError
       except TypeError: # deflate state
         if self.writeset.has_key(key):
           self.delete_by_need(tupled_new)
