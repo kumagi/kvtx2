@@ -10,6 +10,7 @@ def incr_test():
     s('counter',0)
   def incr(setter, getter):
     d = getter('counter')
+    assert(isinstance(d, int))
     setter('counter', d + 1)
   result = rr_transaction(mc, init)
   print result
@@ -29,7 +30,7 @@ def conflict_test():
   result = rr_transaction(mc, init)
   clients = []
   threads = []
-  num = 1
+  num = 10
   for i in range(num):
     clients.append(WrappedClient(["127.0.0.1:11211"])),
     threads.append(threading.Thread(target = lambda:rr_transaction(clients[i], add)))
@@ -60,6 +61,8 @@ def double_read_test():
 def many_account_transaction_test():
   accounts = 100
   first_money = 1000
+  repeat = 100
+  parallel = 10
   def init(setter,getter):
     for i in range(accounts):
       setter("account:"+str(i), first_money)
@@ -71,15 +74,15 @@ def many_account_transaction_test():
       account.append(getter("account:"+str(i)))
   import random
   def work(mc):
-    for i in range(1000):
+    for i in range(repeat):
       from_account = random.randint(0,accounts-1)
       to_account = random.randint(0,accounts-1)
       if from_account == to_account:
         continue
-      money = 1#random.randint(0,first_money)
+      money = random.randint(0,first_money)
       def move(setter,getter):
         from_money = getter("account:"+str(from_account))
-        if from_money < money:
+        if from_money <= money:
           #print "from_money:"+str(from_money)
           return
         to_money = getter("account:"+str(to_account))
@@ -87,21 +90,23 @@ def many_account_transaction_test():
         setter("account:"+str(to_account), to_money + money)
       result = rr_transaction(mc, move)
       #sys.stderr.write(str(result["account:"+str(from_account)]))
+      print result["account:"+str(from_account)]
       assert(0 < result["account:"+str(from_account)])
-
+      '''
+      # check total with snapshot
       result = rr_transaction(mc, checker)
       total = 0
       for i in range(accounts):
         total += result["account:"+str(i)]
       #sys.stderr.write("middle result :"+str(total) + " expect " + str(accounts * first_money) + " in "+str(from_account)+"->"+str(to_account) + "dump"+str(result))
       assert(total == accounts * first_money)
+      '''
   clients = []
   threads = []
-  num = 10
-  for i in range(num):
+  for i in range(parallel):
     clients.append(WrappedClient(["127.0.0.1:11211"]))
-    threads.append(threading.Thread(target = lambda:work(clients[i])))
-    #work(clients[i])
+    #threads.append(threading.Thread(target = lambda:work(clients[i])))
+    work(clients[i])
   for t in threads:
     t.setDaemon(True)
     t.start()
