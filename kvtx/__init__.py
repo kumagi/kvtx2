@@ -64,9 +64,15 @@ class MemTr(object):
     for i in range(length):
       ans += string[self.mc.random.randint(0, len(string) - 1)]
     return ans
-  def save_by_need(self, value):
+  @classmethod
+  def should_indirect(cls, value):
     packed_value = msgpack.packb(value)
     if THRESHOLD  < len(packed_value):
+      return True
+    else:
+      return False
+  def save_by_need(self, value):
+    if MemTr.should_indirect(value):
       return [INDIRECT, self.add_random(value)]
     return [DIRECT, value]
   def delete_by_need(self, key_tuple):
@@ -89,7 +95,7 @@ class MemTr(object):
       key = self.prefix + self._random_string(length)
       result = self.mc.add(key, value)
       if result == True:
-        return key
+	return key
       length += self.mc.random.randint(0, 10) == 0
   def __init__(self, client):
     self.prefix = 'auau:'
@@ -104,75 +110,67 @@ class MemTr(object):
     # asynchronous deflation thread
     self.def_cv = Condition()
     self.def_que = []
-    self.def_thread = Thread(target = self._async_deflate)
+    self.def_thread = Thread(target = lambda:
+			       self.async_work(self.def_cv,
+					       self.def_que,
+					       self.exit_flag,
+					       lambda x:self.deflate(x)))
     self.def_thread.setDaemon(True)
     self.def_thread.start()
 
     # asynchronous deletion thread
     self.del_cv = Condition()
     self.del_que = []
-    self.del_thread = Thread(target = self._async_delete)
+    self.del_thread = Thread(target = lambda:
+			       self.async_work(self.del_cv,
+					       self.del_que,
+					       self.exit_flag,
+					       lambda x:self.mc.delete(x)))
     self.del_thread.setDaemon(True)
     self.del_thread.start()
 
   def begin(self):
     self.transaction_status = self.add_random([ACTIVE, []])
     self.readset = {}
+    self.indirected_readset = {}
     self.writeset = {}
+    self.indirected_writeset = {}
     self.out("begin")
   def out(self,string):
     #sys.stderr.write(self.transaction_status + " : " + string + "\n")
     try:
-      sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+      #sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+      pass
     except:
       pass
     pass
-  def queue_consume(self, queue, fn):
-    try:
-      for item in queue:
-        fn(item)
-    except Exception,e:
-      print "cosume exception",e
+
   def async_work(self, cv, work_queue, exit_flag, fn):
     while True:
       cv.acquire()
       try:
-        while((not exit_flag[0]) and len(work_queue) == 0):
-          self.out("worker waiting...")
-          cv.wait()
-        self.out("awake!")
-        if(exit_flag[0]):
-          self.out("async work end")
-          return
-        consume_target = work_queue
-        work_queue = [] # intialize
+	while((not exit_flag[0]) and len(work_queue) == 0):
+	  self.out("worker waiting...")
+	  cv.wait()
+	self.out("awake!")
+	if(exit_flag[0]):
+	  self.out("async work end")
+	  return
+	consume_target = work_queue
+	work_queue = [] # intialize
       finally:
-        cv.release()
-      self.queue_consume(consume_target, fn)
+	cv.release()
+      map(fn, consume_target)
     return
   def async_enq(self, cv, work_queue, work):
     cv.acquire()
     work_queue.append(work)
     cv.notify()
     cv.release()
-  def _async_delete(self):
-    self.async_work(self.del_cv,
-                    self.del_que,
-                    self.exit_flag,
-                    lambda x:self.mc.delete(x))
-  def _async_deflate(self):
-    self.async_work(self.def_cv,
-                    self.def_que,
-                    self.exit_flag,
-                    lambda x:self.deflate(x))
   def add_del_que(self, target):
-    self.out("add del_que " + str(target) + " do")
     self.async_enq(self.del_cv, self.del_que, target)
-    self.out("add del_que " + str(target) + " done.")
   def add_def_que(self, target):
-    self.out("add def_que " + str(target) + " do")
     self.async_enq(self.def_cv, self.def_que, target)
-    self.out("add def_que" + str(target) + " done.")
   def exit(self):
     # destroy all asynchronous thread
     self.exit_flag[0] = True
@@ -189,39 +187,42 @@ class MemTr(object):
     self.del_cv.notify()
     self.del_cv.release()
     self.del_thread.join()
-    sys.stderr.write("join done.")
-  def __del__(self):
-    self.queue_consume(self.def_que, lambda x:self.deflate(x))
-    self.queue_consume(self.del_que, lambda x:self.mc.delete(x))
+
+    self.out("def_que:" + str(self.def_que))
+    map(lambda x:self.deflate(x), self.def_que)
+    self.out("del_que:" + str(self.del_que))
+    map(lambda x:self.mc.delete(x), self.del_que)
   def deflate(self, owner):
     try:
       now_status, ref_list = self.mc.gets(owner)
     except TypeError:
-      pass
+      return
     for key in ref_list:
       try:
-        inflate, old, new, now_owner = self.mc.gets(key)
-        if owner != now_owner or inflate != INFLATE:
-          continue # other client may inherit this abort tkvp
-        now_status, _ref_list = self.mc.get(now_owner)
-        self.out("deflate: owners status is " + str(now_status))
-        if(now_status == ABORT):
-          self.out("deflate " + str(key) + " => " + str(old))
-          if(old[0] == INFLATE):
-            self.mc.cas(key, old)
-          else:
-            self.mc.cas(key, old[1])
-          self.delete_by_need(new)
-        elif(now_status == COMMITTED):
-          self.out("deflate " + str(key) + " => " + str(new))
-          if(new[0] == INFLATE):
-            self.mc.cas(key, new)
-          else:
-            self.mc.cas(key, new[1])
-          self.delete_by_need(old)
+	inflate, old, new, now_owner = self.mc.gets(key)
+	if owner != now_owner or inflate != INFLATE:
+	  continue # other client may inherit this abort tkvp
+	now_status, _ref_list = self.mc.get(now_owner)
+	self.out("deflate: owners status is " + str(now_status))
+	if(now_status == ABORT):
+	  self.out("deflate " + str(key) + " => " + str(old))
+	  if(old[0] == INDIRECT):
+	    self.mc.cas(key, old)
+	  else:
+	    self.mc.cas(key, old[1])
+	  self.delete_by_need(new)
+	elif(now_status == COMMITTED):
+	  self.out("deflate " + str(key) + " => " + str(new))
+	  if(new[0] == INDIRECT):
+	    self.mc.cas(key, new)
+	  else:
+	    self.mc.cas(key, new[1])
+	  self.delete_by_need(old)
       except TypeError, e:
-        print "deflate:exception",str(e)
-        pass
+	print "deflate:exception",str(e)
+	pass
+      except Exception,e:
+	sys.stderr.write(str(e))
     self.out("deflate deleting owner [" + owner + "]")
     self.add_del_que(owner)
 
@@ -239,9 +240,17 @@ class MemTr(object):
     # snapshot check
     snapshot = self.mc.get_multi(self.readset.keys())
     self.out(str(snapshot) +" =?= "+str(self.readset))
-    if snapshot != self.readset:
-      self.mc.cas(self.transaction_status, [ABORT, self.writeset])
-      raise AbortException
+    for indirect_key in self.indirected_readset.keys():
+      if not isinstance(snapshot[indirect_key], list) or snapshot[indirect_key][1] != self.indirected_readset[indirect_key]:
+	self.out("snapshot didnt match for " + str(self.indirected_readset[indirect_key]) + " != " + str(snapshot[indirect_key][1]))
+	raise AbortException
+      else:
+	snapshot.pop(indirect_key,None)
+    for rest_key in snapshot.keys():
+      if self.readset[rest_key] != snapshot[rest_key]:
+	self.mc.cas(self.transaction_status, [ABORT, self.writeset])
+	self.out("snapshot didnt match for " + str(self.readset[rest_key]) + " != " + str(snapshot[rest_key]))
+	raise AbortException
 
     if not self.mc.cas(self.transaction_status, [COMMITTED, ref_list]):
       return None # commit fail
@@ -258,141 +267,149 @@ class MemTr(object):
       self.memtr = memtr
     def __call__(self, other_status):
       while True:
-        sleep(0.001 * randint(0, 1 << self.count))
-        try:
-          status, ref_list = self.memtr.mc.gets(other_status)
-        except TypeError:
-          return
-        if status != ACTIVE:
-          return
-        if self.count <= 10:
-          self.count += 1
-          continue
-        else:
-          self.count = 0
-          #sys.stderr.write("issue cas\n")
-          rob_success = self.memtr.mc.cas(other_status, [ABORT, ref_list])
-          if rob_success:
-            self.memtr.out("robb done from "+str(other_status))
-            self.memtr.add_def_que(other_status)
-            self.memtr.add_del_que(other_status)
+	sleep(0.001 * randint(0, 1 << self.count))
+	try:
+	  status, ref_list = self.memtr.mc.gets(other_status)
+	except TypeError:
+	  return
+	if status != ACTIVE:
+	  return
+	if self.count <= 10:
+	  self.count += 1
+	  continue
+	else:
+	  self.count = 0
+	  rob_success = self.memtr.mc.cas(other_status, [ABORT, ref_list])
+	  if rob_success:
+	    self.memtr.out("robb done from "+str(other_status))
+	    self.memtr.add_def_que(other_status)
   def set(self, key, value):
     resolver = self.resolver(self)
     if not self.writeset.has_key(key): # add keyname in status for cleanup
       should_active, old_writeset = self.mc.gets(self.transaction_status)
       if should_active != ACTIVE:
-        raise AbortException
+	raise AbortException
       result = self.mc.cas(self.transaction_status, [ACTIVE, self.writeset.keys() + [key]])
       if result == False:
-        raise AbortException
+	raise AbortException
     # start
     tupled_new = self.save_by_need(value)
-    while 1:
+    while(True):
       got_value = self.mc.gets(key)
       self.out("set:got_value for "+key+" => "+str(got_value))
       if got_value == None: # not exist
-        if self.mc.add(key, [INFLATE, None, tupled_new, self.transaction_status]):
-          self.writeset[key] = value
-          return
-        if self.mc.cas_ids.get(key) != None:
-          self.mc.set(key, [INFLATE, None, tupled_new, self.transaction_status])
-        time.sleep(5)
-        continue
+	if self.mc.add(key, [INFLATE, None, tupled_new, self.transaction_status]):
+	  self.writeset[key] = value
+	  return
+	if self.mc.cas_ids.get(key) != None:
+	  self.mc.set(key, [INFLATE, None, tupled_new, self.transaction_status])
+	time.sleep(0.5)
+	continue
       try:
-        if not isinstance(got_value, list): raise TypeError
-        inflate, old, new, owner = got_value # load value
-        if inflate != INFLATE: raise TypeError
-        self.out("set:unpacked:"+str(got_value))
-      except TypeError: # deflate state
-        if self.writeset.has_key(key):
-          self.delete_by_need(tupled_new)
-          raise AbortException
-        if self.readset.has_key(key):
-          if self.readset[key] != got_value:
-            self.out("expected:"+ key + " to be "+ str(self.readset[key]) + " but:" + str(got_value))
-            self.delete_by_need(tupled_new)
-            raise AbortException
-        #self.out("set:"+"key ok\n")
+	if not isinstance(got_value, list): raise TypeError
+	inflate, old, new, owner = got_value # load value
+	if inflate != INFLATE: raise TypeError
+	self.out("set:unpacked:"+str(got_value))
+      except (TypeError, ValueError): # deflate state
+	if self.writeset.has_key(key):
+	  self.delete_by_need(tupled_new)
+	  raise AbortException
+	if self.readset.has_key(key):
+	  if self.readset[key] != got_value:
+	    self.out("expected:"+ key + " to be "+ str(self.readset[key]) + " but:" + str(got_value))
+	    self.delete_by_need(tupled_new)
+	    raise AbortException
+	self.out("set:got_value is " + str(got_value) + "\n")
 
-        tupled_old = self.save_by_need(got_value)
-        result = self.mc.cas(key, [INFLATE, tupled_old, tupled_new, self.transaction_status])
-        if result == True:
-          self.out("attach and write " +key + " for "+ str(value))
-          self.readset.pop(key, None)
-          self.writeset[key] = value
-          return
-        else:
-          self.delete_by_need(tupled_old)
-          continue
+	if(isinstance(got_value, list) and got_value[0] == INDIRECT):
+	  self.out("old owner is deflated and indirected")
+	  pass
+	else:
+	  got_value = [DIRECT, got_value]
+	result = self.mc.cas(key, [INFLATE, got_value, tupled_new, self.transaction_status])
+	if result == True:
+	  self.out("attach and write " +key + " for "+ str(value))
+	  self.readset.pop(key, None)
+	  self.indirected_readset.pop(key, None)
+	  self.writeset[key] = value
+	  return
+	else:
+	  continue
       assert(inflate == INFLATE)
 
       if owner == self.transaction_status:
-        assert(self.writeset.has_key(key))
-        try:
-          owner_status, ref_list = self.mc.get(self.transaction_status)
-          if owner_status != ACTIVE:
-            raise TypeError
-        except TypeError: # if deleted
-          self.delete_by_need(tupled_new)
-          raise AbortException
+	assert(self.writeset.has_key(key))
+	try:
+	  owner_status, ref_list = self.mc.get(self.transaction_status)
+	  if owner_status != ACTIVE:
+	    raise TypeError
+	except TypeError: # if deleted
+	  self.delete_by_need(tupled_new)
+	  raise AbortException
 
-        if new[0] == INDIRECT:
-          self.delete_by_need(tupled_new)
-          result = self.mc.replace(new[1], value)
-          if result:
-            self.writeset[key] = value
-            return
-          else:
-            self.delete_by_need(new)
-            raise AbortException
-        if self.mc.cas(key, [INFLATE, old, tupled_new, self.transaction_status]):
-          self.writeset[key] = value
-          self.delete_by_need(new)
-          return
-        else: # other thread should rob
-          self.delete_by_need(new)
-          self.delete_by_need(tupled_new)
-          raise AbortException
+	self.out("I am owner " + str(new))
+	if new[0] == INDIRECT:
+	  result = self.mc.replace(new[1], value)
+	  if result:
+	    self.out("success to replace " + str(new))
+	    self.delete_by_need(tupled_new)
+	    self.writeset[key] = value
+	    return
+	  else:
+	    self.delete_by_need(tupled_new)
+	    raise AbortException
+	if self.mc.cas(key, [INFLATE, old, tupled_new, self.transaction_status]):
+	  self.writeset[key] = value
+	  self.delete_by_need(new)
+	  return
+	else: # other thread should rob
+	  self.delete_by_need(new)
+	  self.delete_by_need(tupled_new)
+	  raise AbortException
       else:
-        self.out( " != " + str(owner))
-        try:
-          self.out("set: old:"+str(old)+ " new:"+str(new)+" "+str(self.mc.get(owner)))
-          state, ref_list = self.mc.gets(owner)
-        except TypeError: # other thread push to deflate state
-          try:
-            inflate, _1, _2, second_owner_name = self.mc.gets(key)
-            if inflate == INFLATE and owner == second_owner_name: # killed owner inflated this
-              committed_value = get_committed_value(old, new, ABORT)
-              self.delete_by_need(new)
-              raw_value = self.fetch_by_need(old)
-              self.mc.cas(key, raw_value)
-          except TypeError:
-            pass
-          continue
-        if self.writeset.has_key(key): # robbed check
-          self.delete_by_need(tupled_new)
-          raise AbortException # it means that kvp robbed by other
-        if(state == ACTIVE):
-          resolver(owner)
-          continue
+	self.out( " != " + str(owner))
+	try:
+	  self.out("set: old:"+str(old)+ " new:"+str(new)+" "+str(self.mc.get(owner)))
+	  state, ref_list = self.mc.gets(owner)
+	except TypeError: # other thread push to deflate state
+	  try:
+	    inflate, _1, _2, second_owner_name = self.mc.gets(key)
+	    if inflate == INFLATE and owner == second_owner_name: # killed owner inflated this
+	      committed_value = get_committed_value(old, new, ABORT)
+	      self.delete_by_need(new)
+	      raw_value = self.fetch_by_need(old)
+	      self.mc.cas(key, raw_value)
+	  except TypeError:
+	    pass
+	  continue
+	if self.writeset.has_key(key): # robbed check
+	  self.delete_by_need(tupled_new)
+	  raise AbortException # it means that kvp robbed by other
+	if(state == ACTIVE):
+	  resolver(owner)
+	  continue
 
-        assert(state == COMMITTED or state == ABORT)
-        next_old = get_committed_value(old, new, state)
-        to_delete = get_deleting_value(old, new, state)
-        if self.readset.has_key(key): # validate consitency with readset
-          fetched_value = self.fetch_by_need(next_old)
-          if self.readset[key] != fetched_value:
-            self.delete_by_need(tupled_new)
-            raise AbortException # incoherence value detected
+	assert(state == COMMITTED or state == ABORT)
+	next_old = get_committed_value(old, new, state)
+	to_delete = get_deleting_value(old, new, state)
+	if self.readset.has_key(key): # validate consitency with readset
+	  if self.indirected_readset.has_key(key):
+	    if(not isinstance(next_old, list) or
+	       self.indirected_readset[key] != next_old[1]):
+	      raise AbortException
+	  fetched_value = self.fetch_by_need(next_old)
+	  if self.readset[key] != fetched_value:
+	    self.delete_by_need(tupled_new)
+	    raise AbortException # incoherence value detected
 
-        # do inherit
-        inherit_result = self.mc.cas(key,[INFLATE, next_old, tupled_new, self.transaction_status])
-        if inherit_result == True: # inheriting success
-          self.out("success to attach " + key)
-          self.delete_by_need(to_delete)
-          self.readset.pop(key, None)
-          self.writeset[key] = value
-          self.add_def_que(owner)
+	# do inherit
+	inherit_result = self.mc.cas(key,[INFLATE, next_old, tupled_new, self.transaction_status])
+	if inherit_result == True: # inheriting success
+	  self.out("success to attach " + key)
+	  self.delete_by_need(to_delete)
+	  self.readset.pop(key, None)
+	  self.writeset[key] = value
+	  self.add_def_que(owner)
   def get(self, key):
     resolver = self.resolver(self)
     if self.writeset.has_key(key):
@@ -401,64 +418,69 @@ class MemTr(object):
       return self.readset[key]
     while 1:
       try:
-        got_value = self.mc.gets(key)
-        self.out("get:got_value for "+key+" => "+str(got_value))
-        inflate, old, new, owner_name = got_value
-        if inflate != INFLATE: # deflate state
-          self.out("not inflated")
-          raise TypeError
-      except TypeError: # deflated state
-        self.readset[key] = got_value
-        self.out("get:deflate:"+key+" is " + str(got_value))
-        return got_value
+	got_value = self.mc.gets(key)
+	self.out("get:got_value for "+key+" => "+str(got_value))
+	inflate, old, new, owner_name = got_value
+	if inflate != INFLATE: # deflate state
+	  self.out("not inflated")
+	  raise TypeError
+      except (TypeError, ValueError): # deflated state
+	if(isinstance(got_value, list) and got_value[0] == INDIRECT):
+	  self.indirected_readset[key] = got_value[1]
+	  got_value = self.mc.get(got_value[1])
+	self.readset[key] = got_value
+	self.out("get:deflate:"+key+" is " + str(got_value))
+	return got_value
       assert(owner_name != self.transaction_status)
 
       # get for TKVP
-      self.out("get:inflated state: owner => " + str(self.mc.get(owner_name)))
       try:
-        state, _ = self.mc.gets(owner_name) # ref_list will be ignored
+	state, _ = self.mc.gets(owner_name) # ref_list will be ignored
       except TypeError: # status deleted? it may became deflated state
-        try:
-          inflate, _1, _2, second_owner_name = self.mc.gets(key)
-          if inflate == INFLATE and owner_name == second_owner_name:
-            # killed owner of this
-            committed_value = get_committed_value(old, new, ABORT)
-            self.delete_by_need(new)
-            raw_value = self.fetch_by_need(old)
-            self.mc.cas(key, raw_value)
-        except TypeError:
-          pass
-        continue
+	try:
+	  inflate, _1, _2, second_owner_name = self.mc.gets(key)
+	  if inflate == INFLATE and owner_name == second_owner_name:
+	    # killed owner of this
+	    committed_value = get_committed_value(old, new, ABORT)
+	    self.delete_by_need(new)
+	    raw_value = self.fetch_by_need(old)
+	    self.mc.cas(key, raw_value)
+	except TypeError:
+	  pass
+	continue
 
       self.out("inherit from inflated "+ str(key))
       committed_value = get_committed_value(old, new, state)
       raw_value = self.fetch_by_need(old)
       if raw_value == None:
-        if got_value != self.mc.gets(key):
-          continue
+	if got_value != self.mc.gets(key):
+	  continue
       if state == ACTIVE:
-        resolver(owner_name)
+	resolver(owner_name)
       else:
-        raw_value = self.fetch_by_need(committed_value)
-        if self.mc.cas(key, raw_value):
-          self.out("get: deflate "+key +" for "+ str(raw_value))
-          self.delete_by_need(old)
-          self.delete_by_need(new)
+	raw_value = self.fetch_by_need(committed_value)
+	self.add_def_que(owner_name)
+	if self.mc.cas(key, raw_value):
+	  self.out("get: deflate "+key +" for "+ str(raw_value))
+	  self.delete_by_need(old)
+	  self.delete_by_need(new)
 
 def rr_transaction(kvs, target_transaction):
   transaction = MemTr(kvs)
   setter = lambda k,v : transaction.set(k,v)
-  getter = lambda k :   transaction.get(k)
+  getter = lambda k :	transaction.get(k)
   try:
     while(1):
       transaction.begin()
       try:
-        target_transaction(setter, getter)
-        result = transaction.commit()
-        if result != None:
-          return result
+	target_transaction(setter, getter)
+	result = transaction.commit()
+	if result != None:
+	  return result
       except AbortException:
-        continue
+	transaction.out("aborted:" + str(transaction.transaction_status))
+	transaction.add_def_que(transaction.transaction_status)
+	continue
   finally:
     transaction.exit()
 

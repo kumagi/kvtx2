@@ -132,3 +132,7 @@ def large_value_test():
   assert(result["long"] == "hoge"*100)
   result = rr_transaction(mc, two_write)
   assert(result["auaua"] == "aua"*200)
+  def read(s,g):
+    g("long")
+  result = rr_transaction(mc, read)
+  assert(result["long"] == "hoge"*100)
