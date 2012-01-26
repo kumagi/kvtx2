@@ -123,7 +123,7 @@ class MemTr(object):
       try:
         result = self.mc.add(key, value)
       except ConnectionError:
-        sleep 0.1
+        sleep(0.1)
         continue
       if result == True:
 	return key
