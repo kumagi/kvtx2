@@ -1,5 +1,6 @@
 from sys import path
 from os.path import dirname
+from nose.tools import eq_, ok_
 path.append(dirname(__file__) + '/../..')
 from kvtx import *
 import sys
@@ -10,11 +11,11 @@ def incr_test():
     s('counter',0)
   def incr(setter, getter):
     d = getter('counter')
-    assert(isinstance(d, int))
+    ok_(isinstance(d, int))
     setter('counter', d + 1)
   result = rr_transaction(mc, init)
   print result
-  assert(result['counter'] == 0)
+  eq_(result['counter'], 0)
   for i in range(100):
     result = rr_transaction(mc, incr)
   print result['counter']
@@ -44,7 +45,7 @@ def conflict_test():
     g('value')
   result = rr_transaction(mc, lambda s,g: g('value'))
   print result
-  assert(result['value'] == 45 * num)
+  eq_(result['value'], 45 * num)
 def double_read_test():
   def save(s,g):
     s("hoge", 21)
@@ -54,11 +55,11 @@ def double_read_test():
     s("au", 3)
   mc = WrappedClient(["127.0.0.1:11211"])
   result = rr_transaction(mc, save)
-  assert(result["hoge"] == 21)
+  eq_(result["hoge"], 21)
   result = rr_transaction(mc, read)
-  assert(result["hoge"] == 21)
-  assert(result["au"] == 3)
-def many_account_transaction_test():
+  eq_(result["hoge"],21)
+  eq_(result["au"],3)
+def many_account_transaction_tes():
   accounts = 100
   first_money = 1000
   repeat = 100
@@ -91,7 +92,7 @@ def many_account_transaction_test():
       result = rr_transaction(mc, move)
       #sys.stderr.write(str(result["account:"+str(from_account)]))
       print result["account:"+str(from_account)]
-      assert(0 < result["account:"+str(from_account)])
+      ok_(0 < result["account:"+str(from_account)])
       '''
       # check total with snapshot
       result = rr_transaction(mc, checker)
@@ -99,7 +100,7 @@ def many_account_transaction_test():
       for i in range(accounts):
         total += result["account:"+str(i)]
       #sys.stderr.write("middle result :"+str(total) + " expect " + str(accounts * first_money) + " in "+str(from_account)+"->"+str(to_account) + "dump"+str(result))
-      assert(total == accounts * first_money)
+      ok_(total == accounts * first_money)
       '''
   clients = []
   threads = []
@@ -119,7 +120,7 @@ def many_account_transaction_test():
   for i in range(accounts):
     total += result["account:"+str(i)]
   print "result :"+str(total) + " expect " + str(accounts * first_money)
-  assert(total == accounts * first_money)
+  eq_(total, accounts * first_money)
 
 def large_value_test():
   def init(s,g):
@@ -129,10 +130,10 @@ def large_value_test():
     s("auaua", "aua"*200)
   mc = WrappedClient(["127.0.0.1:11211"])
   result = rr_transaction(mc, init)
-  assert(result["long"] == "hoge"*100)
+  eq_(result["long"], "hoge"*100)
   result = rr_transaction(mc, two_write)
-  assert(result["auaua"] == "aua"*200)
+  eq_(result["auaua"], "aua"*200)
   def read(s,g):
     g("long")
   result = rr_transaction(mc, read)
-  assert(result["long"] == "hoge"*100)
+  eq_(result["long"], "hoge"*100)

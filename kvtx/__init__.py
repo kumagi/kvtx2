@@ -5,6 +5,7 @@ from random import Random
 from random import randint
 from threading import Thread
 import memcache
+import pylibmc
 import sys
 import msgpack
 
@@ -41,12 +42,38 @@ def get_deleting_value(old, new, status):
 
 class WrappedClient(object):
   def __init__(self, *args):
-    from memcache import Client
-    self.mc = Client(*args, cache_cas = True)
+    from pylibmc import Client
+    #from memcache import Client
+    from pylru import lrucache
+    self.mc = Client(*args, behaviors={"cas": True})
+    #self.mc = Client(*args, cache_cas = True)
+    self.unique = lrucache(1000)
     self.del_que = []
     self.random = Random()
     self.random.seed()
     import threading
+  def gets(self, key):
+    while True:
+      try:
+        result = self.mc.gets(key)
+      except pylibmc.NotFound:
+        return None
+      except pylibmc.MemcachedError:
+        sleep(0.5)
+        continue
+      if isinstance(result, tuple):
+        self.unique[key] = result[1]
+        return result[0]
+      return result
+  def cas(self, key, value):
+    try:
+      unique = self.unique[key]
+      return self.mc.cas(key, value, unique)
+    except KeyError:
+      try:
+        return self.mc.cas(key, value)
+      except TypeError:
+        return False
   def add(self, key, value):
     result = self.mc.add(key, value)
     if not isinstance(result, bool):
@@ -93,7 +120,11 @@ class MemTr(object):
     length = 8
     while 1:
       key = self.prefix + self._random_string(length)
-      result = self.mc.add(key, value)
+      try:
+        result = self.mc.add(key, value)
+      except ConnectionError:
+        sleep 0.1
+        continue
       if result == True:
 	return key
       length += self.mc.random.randint(0, 10) == 0
@@ -139,7 +170,7 @@ class MemTr(object):
   def out(self,string):
     #sys.stderr.write(self.transaction_status + " : " + string + "\n")
     try:
-      #sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+      sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
       pass
     except:
       pass
@@ -465,7 +496,7 @@ class MemTr(object):
 	  self.delete_by_need(old)
 	  self.delete_by_need(new)
 
-def rr_transaction(kvs, target_transaction):
+def rr_transaction(kvs, target_transaction, clean = False):
   transaction = MemTr(kvs)
   setter = lambda k,v : transaction.set(k,v)
   getter = lambda k :	transaction.get(k)
@@ -482,7 +513,8 @@ def rr_transaction(kvs, target_transaction):
 	transaction.add_def_que(transaction.transaction_status)
 	continue
   finally:
-    transaction.exit()
+    if clean:
+      transaction.exit()
 
 if __name__ == '__main__':
   mc = WrappedClient(['127.0.0.1:11211'])
