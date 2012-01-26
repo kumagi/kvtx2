@@ -53,7 +53,6 @@ class WrappedClient(object):
   def gets(self, key):
     while True:
       result = self.mc.gets(key)
-        continue
       if isinstance(result, tuple):
         self.unique[key] = result[1]
         return result[0]
