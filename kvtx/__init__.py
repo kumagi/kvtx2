@@ -5,7 +5,6 @@ from random import Random
 from random import randint
 from threading import Thread
 import memcache
-import pylibmc
 import sys
 import msgpack
 
@@ -42,8 +41,7 @@ def get_deleting_value(old, new, status):
 
 class WrappedClient(object):
   def __init__(self, *args):
-    from pylibmc import Client
-    #from memcache import Client
+    from memcache import Client
     from pylru import lrucache
     self.mc = Client(*args, behaviors={"cas": True})
     #self.mc = Client(*args, cache_cas = True)
@@ -54,12 +52,7 @@ class WrappedClient(object):
     import threading
   def gets(self, key):
     while True:
-      try:
-        result = self.mc.gets(key)
-      except pylibmc.NotFound:
-        return None
-      except pylibmc.MemcachedError:
-        sleep(0.5)
+      result = self.mc.gets(key)
         continue
       if isinstance(result, tuple):
         self.unique[key] = result[1]
