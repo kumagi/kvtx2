@@ -42,8 +42,7 @@ def get_deleting_value(old, new, status):
 class WrappedClient(object):
   def __init__(self, *args):
     from memcache import Client
-    self.mc = Client(*args, behaviors={"cas": True})
-    #self.mc = Client(*args, cache_cas = True)
+    self.mc = Client(*args, cache_cas = True)
     self.del_que = []
     self.random = Random()
     self.random.seed()
