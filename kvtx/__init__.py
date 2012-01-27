@@ -42,10 +42,8 @@ def get_deleting_value(old, new, status):
 class WrappedClient(object):
   def __init__(self, *args):
     from memcache import Client
-    from pylru import lrucache
     self.mc = Client(*args, behaviors={"cas": True})
     #self.mc = Client(*args, cache_cas = True)
-    self.unique = lrucache(1000)
     self.del_que = []
     self.random = Random()
     self.random.seed()
@@ -54,18 +52,13 @@ class WrappedClient(object):
     while True:
       result = self.mc.gets(key)
       if isinstance(result, tuple):
-        self.unique[key] = result[1]
         return result[0]
       return result
   def cas(self, key, value):
     try:
-      unique = self.unique[key]
-      return self.mc.cas(key, value, unique)
-    except KeyError:
-      try:
-        return self.mc.cas(key, value)
-      except TypeError:
-        return False
+      return self.mc.cas(key, value)
+    except TypeError:
+      return False
   def add(self, key, value):
     result = self.mc.add(key, value)
     if not isinstance(result, bool):
