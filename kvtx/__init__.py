@@ -175,7 +175,11 @@ class MemTr(object):
 	work_queue = [] # intialize
       finally:
 	cv.release()
-      map(fn, consume_target)
+      try:
+        map(fn, consume_target)
+      except:
+        # main thread may be dead
+        pass
     return
   def async_enq(self, cv, work_queue, work):
     cv.acquire()
