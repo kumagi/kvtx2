@@ -42,7 +42,7 @@ def get_deleting_value(old, new, status):
 class WrappedClient(object):
   def __init__(self, *args):
     from memcache import Client
-    self.mc = Client(*args, cache_cas = True)
+    self.mc = Client(*args, cache_cas = True, socket_timeout=10)
     self.del_que = []
     self.random = Random()
     self.random.seed()
@@ -111,7 +111,8 @@ class MemTr(object):
         continue
       if result == True:
 	return key
-      length += self.mc.random.randint(0, 10) == 0
+      if length < 250:
+        length += self.mc.random.randint(0, 10) == 0
   def __init__(self, client):
     self.prefix = 'auau:'
     self.mc = client
