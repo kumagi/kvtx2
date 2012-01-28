@@ -174,7 +174,10 @@ class MemTr(object):
 	consume_target = work_queue
 	work_queue = [] # intialize
       finally:
-	cv.release()
+        try:
+          cv.release()
+        except: # ignore all
+          pass
       try:
         map(fn, consume_target)
       except:
@@ -305,12 +308,15 @@ class MemTr(object):
   def set(self, key, value):
     resolver = self.resolver(self)
     if not self.writeset.has_key(key): # add keyname in status for cleanup
-      should_active, old_writeset = self.mc.gets(self.transaction_status)
-      if should_active != ACTIVE:
-	raise AbortException
-      result = self.mc.cas(self.transaction_status, [ACTIVE, self.writeset.keys() + [key]])
-      if result == False:
-	raise AbortException
+      try:
+        should_active, old_writeset = self.mc.gets(self.transaction_status)
+        if should_active != ACTIVE:
+          raise AbortException
+        result = self.mc.cas(self.transaction_status, [ACTIVE, self.writeset.keys() + [key]])
+        if result == False:
+          raise AbortException
+      except TypeError:
+        raise AbortException
     # start
     tupled_new = self.save_by_need(value)
     while(True):
@@ -488,6 +494,7 @@ def rr_transaction(kvs, target_transaction, clean = False):
   transaction = MemTr(kvs)
   setter = lambda k,v : transaction.set(k,v)
   getter = lambda k :	transaction.get(k)
+  wait_count = 1
   try:
     while(1):
       transaction.begin()
@@ -500,6 +507,12 @@ def rr_transaction(kvs, target_transaction, clean = False):
 	transaction.out("aborted:" + str(transaction.transaction_status))
 	transaction.add_def_que(transaction.transaction_status)
 	continue
+      except ConnectionError:
+        transaction.add_def_que(transaction.transaction_status)
+        sleep(0.001 * randint(0, 1 << wait_count))
+        if wait_count < 10:
+          wait_count += 1
+        continue
   finally:
     if clean:
       transaction.exit()
