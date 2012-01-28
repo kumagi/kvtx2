@@ -173,6 +173,8 @@ class MemTr(object):
 	  return
 	consume_target = work_queue
 	work_queue = [] # intialize
+      except Exception, e:
+        print str(e)
       finally:
         try:
           cv.release()
