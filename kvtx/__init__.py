@@ -166,7 +166,6 @@ class MemTr(object):
       cv.acquire()
       try:
 	while((not exit_flag[0]) and len(work_queue) == 0):
-	  self.out("worker waiting...")
 	  cv.wait()
 	self.out("awake!")
 	if(exit_flag[0]):
