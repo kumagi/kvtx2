@@ -173,8 +173,8 @@ class MemTr(object):
 	  return
 	consume_target = work_queue
 	work_queue = [] # intialize
-      except Exception, e:
-        print str(e)
+      except:
+        pass # ignore all
       finally:
         try:
           cv.release()
@@ -183,8 +183,7 @@ class MemTr(object):
       try:
         map(fn, consume_target)
       except:
-        # main thread may be dead
-        pass
+        pass # ignore all
     return
   def async_enq(self, cv, work_queue, work):
     cv.acquire()
