@@ -163,7 +163,10 @@ class MemTr(object):
 
   def async_work(self, cv, work_queue, exit_flag, fn):
     while True:
-      cv.acquire()
+      try:
+        cv.acquire()
+      except:
+        return
       try:
 	while((not exit_flag[0]) and len(work_queue) == 0):
 	  cv.wait()
