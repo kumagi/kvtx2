@@ -102,7 +102,7 @@ class MemTr(object):
     else:
       raise Exception("invalid tuple " + str(key_tuple))
   def add_random(self, value):
-    length = 8
+    length = 32
     while 1:
       key = self.prefix + self._random_string(length)
       try:
@@ -123,7 +123,7 @@ class MemTr(object):
     self.mc = client
 
     self.random = Random()
-    self.random.seed()
+    self.random.seed(os.urandom(128))
     # thread exit flag
     self.exit_flag = [False]
 
