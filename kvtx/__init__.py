@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
 import time
 from time import sleep
+import random
 from random import Random
 from random import randint
 from threading import Thread
 import memcache
 import sys
 import msgpack
+import os
+from memcache import Client
+
 
 class AbortException(Exception):
   pass
 class ConnectionError(Exception):
   pass
 
-INFLATE = 'inflate'
+INFLATE = 'i'
 
-COMMITTED = 'committed'
-ABORT = 'abort'
-ACTIVE = 'active'
+COMMITTED = 'c'
+ABORT = 'ab'
+ACTIVE = 'ac'
 
 THRESHOLD = 10
-DIRECT = 'direct'
-INDIRECT = 'indirect'
+DIRECT = 'd'
+INDIRECT = 'i'
 
 def get_committed_value(old, new, status):
   if status == COMMITTED:
@@ -41,11 +45,8 @@ def get_deleting_value(old, new, status):
 
 class WrappedClient(object):
   def __init__(self, *args):
-    from memcache import Client
     self.mc = Client(*args, cache_cas = True, socket_timeout=10)
     self.del_que = []
-    self.random = Random()
-    self.random.seed()
     import threading
   def gets(self, key):
     while True:
@@ -70,10 +71,10 @@ class WrappedClient(object):
 class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
-    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
+    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890#$%^&*()_+{}"|?><!~`-=[]\'\\/./,'
     ans = ''
     for i in range(length):
-      ans += string[self.mc.random.randint(0, len(string) - 1)]
+      ans += string[self.random.randint(0, len(string) - 1)]
     return ans
   @classmethod
   def should_indirect(cls, value):
@@ -105,18 +106,24 @@ class MemTr(object):
     while 1:
       key = self.prefix + self._random_string(length)
       try:
+        #sys.stderr.write("key:%s\n" % key)
         result = self.mc.add(key, value)
       except ConnectionError:
         sleep(0.1)
         continue
       if result == True:
 	return key
-      if length < 250:
-        length += self.mc.random.randint(0, 10) == 0
+      if length < 249:
+        length += random.randint(0, 10) == 0
+      else:
+        self.random.seed(os.urandom(16))
+        length = 8
   def __init__(self, client):
     self.prefix = 'auau:'
     self.mc = client
 
+    self.random = Random()
+    self.random.seed()
     # thread exit flag
     self.exit_flag = [False]
 
@@ -294,7 +301,9 @@ class MemTr(object):
       self.memtr = memtr
     def __call__(self, other_status):
       while True:
-	sleep(0.001 * randint(0, 1 << self.count))
+        wait_time = 0.001 * randint(0, 1 << self.count)
+        self.memtr.out("backoff wait:%f\n" % wait_time)
+	sleep(wait_time)
 	try:
 	  status, ref_list = self.memtr.mc.gets(other_status)
 	except TypeError:
@@ -495,8 +504,10 @@ class MemTr(object):
 	  self.delete_by_need(old)
 	  self.delete_by_need(new)
 
-def rr_transaction(kvs, target_transaction, clean = False):
+def rr_transaction(kvs, target_transaction):
+  #sys.stderr.write("hell{")
   transaction = MemTr(kvs)
+  #sys.stderr.write("}o!!")
   setter = lambda k,v : transaction.set(k,v)
   getter = lambda k :	transaction.get(k)
   wait_count = 1
@@ -519,8 +530,7 @@ def rr_transaction(kvs, target_transaction, clean = False):
           wait_count += 1
         continue
   finally:
-    if clean:
-      transaction.exit()
+    transaction.exit()
 
 if __name__ == '__main__':
   mc = WrappedClient(['127.0.0.1:11211'])

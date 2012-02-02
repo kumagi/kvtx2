@@ -59,11 +59,12 @@ def double_read_test():
   result = rr_transaction(mc, read)
   eq_(result["hoge"],21)
   eq_(result["au"],3)
-def many_account_transaction_tes():
+finished = [0]
+def many_account_transaction_test():
   accounts = 100
   first_money = 1000
-  repeat = 100
-  parallel = 10
+  repeat = 1000
+  parallel = 5
   def init(setter,getter):
     for i in range(accounts):
       setter("account:"+str(i), first_money)
@@ -74,7 +75,10 @@ def many_account_transaction_tes():
     for i in range(accounts):
       account.append(getter("account:"+str(i)))
   import random
+  global finished
+  finished = [0]
   def work(mc):
+    global finished
     for i in range(repeat):
       from_account = random.randint(0,accounts-1)
       to_account = random.randint(0,accounts-1)
@@ -90,8 +94,8 @@ def many_account_transaction_tes():
         setter("account:"+str(from_account), from_money - money)
         setter("account:"+str(to_account), to_money + money)
       result = rr_transaction(mc, move)
-      #sys.stderr.write(str(result["account:"+str(from_account)]))
-      print result["account:"+str(from_account)]
+      #sys.stderr.write(str(i) +":"+ str(result["account:"+str(from_account)])+"\n")
+      # print result["account:"+str(from_account)]
       ok_(0 < result["account:"+str(from_account)])
       '''
       # check total with snapshot
@@ -102,6 +106,8 @@ def many_account_transaction_tes():
       #sys.stderr.write("middle result :"+str(total) + " expect " + str(accounts * first_money) + " in "+str(from_account)+"->"+str(to_account) + "dump"+str(result))
       ok_(total == accounts * first_money)
       '''
+    finished[0] += 1
+    #sys.stderr.write("finish %d\n" % finished[0])
   clients = []
   threads = []
   for i in range(parallel):
