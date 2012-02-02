@@ -113,7 +113,7 @@ class MemTr(object):
         continue
       if result == True:
 	return key
-      if length < 249:
+      if length < 249 - len(self.prefix):
         length += random.randint(0, 10) == 0
       else:
         self.random.seed(os.urandom(16))
