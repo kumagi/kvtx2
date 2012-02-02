@@ -245,10 +245,11 @@ class MemTr(object):
 	    self.mc.cas(key, new[1])
 	  self.delete_by_need(old)
       except TypeError, e:
-	print "deflate:exception",str(e)
+	#print "deflate:exception",str(e)
 	pass
       except Exception,e:
-	sys.stderr.write(str(e))
+	#sys.stderr.write(str(e))
+        pass
     self.out("deflate deleting owner [" + owner + "]")
     self.add_del_que(owner)
 
