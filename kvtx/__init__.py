@@ -209,22 +209,34 @@ class MemTr(object):
     self.exit_flag[0] = True
     self.out("memtr exit start")
 
-    self.def_cv.acquire()
-    self.exit_flag[0] = True
-    self.def_cv.notify()
-    self.def_cv.release()
-    self.def_thread.join()
+    try:
+      self.def_cv.acquire()
+      self.exit_flag[0] = True
+      self.def_cv.notify()
+      self.def_cv.release()
+      self.def_thread.join()
+    except:
+      pass
+  
+    try:
+      self.del_cv.acquire()
+      self.exit_flag[0] = True
+      self.del_cv.notify()
+      self.del_cv.release()
+      self.del_thread.join()
+    except:
+      pass
 
-    self.del_cv.acquire()
-    self.exit_flag[0] = True
-    self.del_cv.notify()
-    self.del_cv.release()
-    self.del_thread.join()
-
-    self.out("def_que:" + str(self.def_que))
-    map(lambda x:self.deflate(x), self.def_que)
-    self.out("del_que:" + str(self.del_que))
-    map(lambda x:self.mc.delete(x), self.del_que)
+    try:
+      self.out("def_que:" + str(self.def_que))
+      map(lambda x:self.deflate(x), self.def_que)
+    except:
+      pass
+    try:
+      self.out("del_que:" + str(self.del_que))
+      map(lambda x:self.mc.delete(x), self.del_que)
+    except:
+      pass
   def deflate(self, owner):
     try:
       now_status, ref_list = self.mc.gets(owner)
