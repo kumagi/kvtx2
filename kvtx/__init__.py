@@ -114,9 +114,10 @@ class MemTr(object):
       if result == True:
 	return key
       if length < 249 - len(self.prefix):
+        sys.stderr.write("random length is %d\n" % length)
         length += random.randint(0, 10) == 0
       else:
-        self.random.seed(os.urandom(16))
+        self.random.seed(os.urandom(8))
         length = 8
   def __init__(self, client):
     self.prefix = 'auau:'
@@ -217,7 +218,6 @@ class MemTr(object):
       self.def_thread.join()
     except:
       pass
-  
     try:
       self.del_cv.acquire()
       self.exit_flag[0] = True

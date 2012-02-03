@@ -61,10 +61,10 @@ def double_read_test():
   eq_(result["au"],3)
 finished = [0]
 def many_account_transaction_test():
-  accounts = 100
+  accounts = 1000
   first_money = 1000
   repeat = 1000
-  parallel = 5
+  parallel = 100
   def init(setter,getter):
     for i in range(accounts):
       setter("account:"+str(i), first_money)
@@ -112,8 +112,8 @@ def many_account_transaction_test():
   threads = []
   for i in range(parallel):
     clients.append(WrappedClient(["127.0.0.1:11211"]))
-    #threads.append(threading.Thread(target = lambda:work(clients[i])))
-    work(clients[i])
+    threads.append(threading.Thread(target = lambda:work(clients[i])))
+    #work(clients[i])
   for t in threads:
     t.setDaemon(True)
     t.start()
