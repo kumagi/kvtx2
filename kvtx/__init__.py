@@ -45,6 +45,7 @@ def get_deleting_value(old, new, status):
 
 class WrappedClient(object):
   def __init__(self, *args):
+    self.args = args
     self.mc = Client(*args, cache_cas = True, socket_timeout=10)
     self.del_que = []
     import threading
@@ -60,10 +61,17 @@ class WrappedClient(object):
     except TypeError:
       return False
   def add(self, key, value):
-    result = self.mc.add(key, value)
-    if not isinstance(result, bool):
-      raise ConnectionError
-    return result
+    retry_count = 0
+    while True:
+      result = self.mc.add(key, value)
+      if not isinstance(result, bool):
+        if retry_count <= 10:
+          retry_count += 1
+        wait_time = 0.001 * randint(0, 1 << retry_count)
+        sleep(wait_time)
+        continue
+        #raise ConnectionError
+      return result
   # delegation
   def __getattr__(self, attrname):
     return getattr(self.mc, attrname)
@@ -106,15 +114,15 @@ class MemTr(object):
     while 1:
       key = self.prefix + self._random_string(length)
       try:
-        #sys.stderr.write("key:%s\n" % key)
         result = self.mc.add(key, value)
+        print result
       except ConnectionError:
         sleep(0.1)
         continue
       if result == True:
 	return key
       if length < 249 - len(self.prefix):
-        sys.stderr.write("random length is %d\n" % length)
+        sys.stderr.write("random length is %d\n" % (length,))
         length += random.randint(0, 10) == 0
       else:
         self.random.seed(os.urandom(8))
