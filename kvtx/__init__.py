@@ -170,7 +170,7 @@ class MemTr(object):
   def out(self,string):
     #sys.stderr.write(self.transaction_status + " : " + string + "\n")
     try:
-      #sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
+      sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset) + " rb" + str(self.readset) +" : " + string + "\n")
       pass
     except:
       pass
