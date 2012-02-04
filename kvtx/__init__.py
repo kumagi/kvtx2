@@ -45,7 +45,6 @@ def get_deleting_value(old, new, status):
 
 class WrappedClient(object):
   def __init__(self, *args):
-    self.args = args
     self.mc = Client(*args, cache_cas = True, socket_timeout=10)
     self.del_que = []
     import threading
@@ -115,12 +114,12 @@ class MemTr(object):
       key = self.prefix + self._random_string(length)
       try:
         result = self.mc.add(key, value)
-        print result
       except ConnectionError:
         sleep(0.1)
         continue
       if result == True:
 	return key
+      sys.stderr.write("key:[%s] already exists! for %s\n", (key, str(self.mc.get(key))))
       if length < 249 - len(self.prefix):
         sys.stderr.write("random length is %d\n" % (length,))
         length += random.randint(0, 10) == 0
