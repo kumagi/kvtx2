@@ -48,6 +48,7 @@ def conflict_test():
   result = rr_transaction(mc, lambda s,g: g('value'))
   print result
   eq_(result['value'], 45 * num)
+  ok_(False)
 def double_read_test():
   def save(s,g):
     s("hoge", 21)
@@ -62,7 +63,7 @@ def double_read_test():
   eq_(result["hoge"],21)
   eq_(result["au"],3)
 finished = [0]
-def many_account_transaction_test():
+def many_account_transaction_tes():
   accounts = 1000
   first_money = 1000
   repeat = 1000
