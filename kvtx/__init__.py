@@ -109,7 +109,7 @@ class MemTr(object):
     else:
       raise Exception("invalid tuple " + str(key_tuple))
   def add_random(self, value):
-    length = 32
+    length = 128
     while 1:
       key = self.prefix + self._random_string(length)
       try:
@@ -119,13 +119,13 @@ class MemTr(object):
         continue
       if result == True:
 	return key
-      sys.stderr.write("key:[%s] already exists! for %s\n", (key, str(self.mc.get(key))))
+      sys.stderr.write("key:[%s] already exists! for %s\n" % (key, str(self.mc.get(key))))
       if length < 249 - len(self.prefix):
         sys.stderr.write("random length is %d\n" % (length,))
         length += random.randint(0, 10) == 0
       else:
         self.random.seed(os.urandom(8))
-        length = 8
+        length = 64
   def __init__(self, client):
     self.prefix = 'auau:'
     self.mc = client
