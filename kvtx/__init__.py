@@ -78,7 +78,7 @@ class WrappedClient(object):
 class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
-    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890#$%^&*()_+{}"|?><!~`-=[]\'\\/./,'
+    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890#$%^&*()_+{}"|?>@<!~`-=[]\'\\/./,ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾜｦﾝｧｨｩｪｫｯｬｭｮ･｡｢｣'
     ans = ''
     for i in range(length):
       ans += string[self.random.randint(0, len(string) - 1)]
@@ -125,6 +125,7 @@ class MemTr(object):
         length += random.randint(0, 10) == 0
       else:
         self.random.seed(os.urandom(8))
+        self.random.jumpahead(os.getpid())
         length = 64
   def __init__(self, client):
     self.prefix = 'auau:'
@@ -132,6 +133,7 @@ class MemTr(object):
 
     self.random = Random()
     self.random.seed(os.urandom(128))
+    self.random.jumpahead(os.getpid())
     # thread exit flag
     self.exit_flag = [False]
 
