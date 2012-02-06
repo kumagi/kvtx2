@@ -78,7 +78,7 @@ class WrappedClient(object):
 class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
-    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890#$%^&*()_+{}"|?>@<!~`-=[]\'\\/./,ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾜｦﾝｧｨｩｪｫｯｬｭｮ･｡｢｣'
+    string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890#$%^&*()_+{}"|?>@<!~`-=[]\'\\/.'
     ans = ''
     for i in range(length):
       ans += string[self.random.randint(0, len(string) - 1)]

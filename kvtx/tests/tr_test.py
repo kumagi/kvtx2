@@ -5,7 +5,7 @@ path.append(dirname(__file__) + '/../..')
 from kvtx import *
 import sys
 
-clientlist = ["127.0.0.1:11201", "127.0.0.1:11200", "127.0.0.1:11202", "127.0.0.1:11211"]
+clientlist = ["127.0.0.1:11211"]
 
 def incr_test():
   mc = WrappedClient(clientlist)
@@ -48,7 +48,6 @@ def conflict_test():
   result = rr_transaction(mc, lambda s,g: g('value'))
   print result
   eq_(result['value'], 45 * num)
-  ok_(False)
 def double_read_test():
   def save(s,g):
     s("hoge", 21)
