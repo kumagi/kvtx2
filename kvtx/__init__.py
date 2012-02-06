@@ -393,12 +393,15 @@ class MemTr(object):
 	  self.writeset[key] = value
 	  return
 	else:
+          print "getting " + key + " failed by " + self.transaction_status
 	  continue
       assert(inflate == INFLATE)
 
       if owner == self.transaction_status:
         if not self.writeset.has_key(key):
           print "status:"+self.transaction_status
+          print "writeset:"+str(self.writeset)
+          print "expected"+str(self.mc.get(owner)[1])
           print "key:" + key
 	assert(self.writeset.has_key(key))
 	try:
