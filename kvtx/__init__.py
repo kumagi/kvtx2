@@ -359,10 +359,12 @@ class MemTr(object):
       if got_value == None: # not exist
 	if self.mc.add(key, [INFLATE, None, tupled_new, self.transaction_status]):
 	  self.writeset[key] = value
+          print "setting not existed key " + key + " success by " + self.transaction_status
 	  return
         print "setting not existed key " + key + " failed by " + self.transaction_status
 	if self.mc.cas_ids.get(key) != None:
 	  self.mc.set(key, [INFLATE, None, tupled_new, self.transaction_status])
+          return
 	time.sleep(0.5)
 	continue
       try:
