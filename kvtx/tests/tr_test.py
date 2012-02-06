@@ -36,8 +36,8 @@ def conflict_test():
   num = 10
   for i in range(num):
     clients.append(WrappedClient(clientlist)),
-    threads.append(threading.Thread(target = lambda:rr_transaction(clients[i], add)))
-    #rr_transaction(clients[i], add)
+    #threads.append(threading.Thread(target = lambda:rr_transaction(clients[i], add)))
+    rr_transaction(clients[i], add)
   for t in threads:
     t.setDaemon(True)
     t.start()
