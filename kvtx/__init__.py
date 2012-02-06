@@ -78,7 +78,9 @@ class WrappedClient(object):
 class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
-    ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+{}:"|;<>?/,.[]=_'
+    #ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+{}:"|;<>?/,.[]=_'
+    ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890'
+
     return ''.join(random.choice(ascii_charactor) for _ in xrange(length))
   @classmethod
   def should_indirect(cls, value):
@@ -106,7 +108,7 @@ class MemTr(object):
     else:
       raise Exception("invalid tuple " + str(key_tuple))
   def add_random(self, value):
-    length = 128
+    length = 10
     while 1:
       key = self.prefix + self._random_string(length)
       try:
@@ -116,14 +118,13 @@ class MemTr(object):
         continue
       if result == True:
 	return key
-      sys.stderr.write("key:[%s] already exists! for %s\n" % (key, str(self.mc.get(key))))
       if length < 249 - len(self.prefix):
         sys.stderr.write("random length is %d\n" % (length,))
         length += random.randint(0, 10) == 0
       else:
         self.random.seed(os.urandom(8))
         self.random.jumpahead(os.getpid())
-        length = 64
+        length = 10
   def __init__(self, client):
     self.prefix = 'auau:'
     self.mc = client
@@ -169,7 +170,8 @@ class MemTr(object):
   def out(self,string):
     #sys.stderr.write(self.transaction_status + " : " + string + "\n")
     try:
-      sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
+      #sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
+      #print(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
       pass
     except:
       pass
@@ -395,6 +397,9 @@ class MemTr(object):
       assert(inflate == INFLATE)
 
       if owner == self.transaction_status:
+        if not self.writeset.has_key(key):
+          print "status:"+self.transaction_status
+          print "key:" + key
 	assert(self.writeset.has_key(key))
 	try:
 	  owner_status, ref_list = self.mc.get(self.transaction_status)
