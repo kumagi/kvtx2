@@ -62,10 +62,10 @@ def double_read_test():
   eq_(result["hoge"],21)
   eq_(result["au"],3)
 finished = [0]
-def many_account_transaction_tes():
+def many_account_transaction_test():
   accounts = 1000
   first_money = 1000
-  repeat = 1000
+  repeat = 100
   parallel = 100
   def init(setter,getter):
     for i in range(accounts):
