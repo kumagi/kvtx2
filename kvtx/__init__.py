@@ -17,15 +17,15 @@ class AbortException(Exception):
 class ConnectionError(Exception):
   pass
 
-INFLATE = 'i'
+INFLATE = 'inflate'
 
-COMMITTED = 'c'
-ABORT = 'ab'
-ACTIVE = 'ac'
+COMMITTED = 'committed'
+ABORT = 'abort'
+ACTIVE = 'acctive'
 
 THRESHOLD = 10
-DIRECT = 'd'
-INDIRECT = 'i'
+DIRECT = 'direct'
+INDIRECT = 'indirecrt'
 
 def get_committed_value(old, new, status):
   if status == COMMITTED:
