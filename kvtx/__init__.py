@@ -17,15 +17,15 @@ class AbortException(Exception):
 class ConnectionError(Exception):
   pass
 
-INFLATE = 'inflate'
+INFLATE = 'inf'
 
-COMMITTED = 'committed'
-ABORT = 'abort'
-ACTIVE = 'acctive'
+COMMITTED = 'com'
+ABORT = 'ab'
+ACTIVE = 'ac'
 
 THRESHOLD = 10
-DIRECT = 'direct'
-INDIRECT = 'indirecrt'
+DIRECT = 'di'
+INDIRECT = 'in'
 
 def get_committed_value(old, new, status):
   if status == COMMITTED:
@@ -359,9 +359,9 @@ class MemTr(object):
       if got_value == None: # not exist
 	if self.mc.add(key, [INFLATE, None, tupled_new, self.transaction_status]):
 	  self.writeset[key] = value
-          print "setting not existed key " + key + " success by " + self.transaction_status
+          #print "setting not existed key " + key + " success by " + self.transaction_status
 	  return
-        print "setting not existed key " + key + " failed by " + self.transaction_status
+        #print "setting not existed key " + key + " failed by " + self.transaction_status
 	if self.mc.cas_ids.get(key) != None:
 	  self.mc.set(key, [INFLATE, None, tupled_new, self.transaction_status])
           return
@@ -396,7 +396,7 @@ class MemTr(object):
 	  self.writeset[key] = value
 	  return
 	else:
-          print "getting " + key + " failed by " + self.transaction_status
+          #print "getting " + key + " failed by " + self.transaction_status
 	  continue
       assert(inflate == INFLATE)
 
