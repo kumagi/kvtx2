@@ -475,6 +475,8 @@ class MemTr(object):
 	  self.readset.pop(key, None)
 	  self.writeset[key] = value
 	  self.add_def_que(owner)
+        else:
+          print "getting " + key + " failed by " + self.transaction_status
   def get(self, key):
     resolver = self.resolver(self)
     if self.writeset.has_key(key):
