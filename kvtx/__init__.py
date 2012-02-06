@@ -404,6 +404,7 @@ class MemTr(object):
           print "writeset:"+str(self.writeset)
           print "expected"+str(self.mc.get(owner)[1])
           print "key:" + key
+          exit()
 	assert(self.writeset.has_key(key))
 	try:
 	  owner_status, ref_list = self.mc.get(self.transaction_status)
