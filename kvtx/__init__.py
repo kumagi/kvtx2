@@ -323,16 +323,18 @@ class MemTr(object):
       self.count = 0
       self.memtr = memtr
     def __call__(self, other_status):
+      print self.memtr.transaction_status + 'conflict backoff for' + other_status
       while True:
         wait_time = 0.001 * randint(0, 1 << self.count)
-        self.memtr.out("backoff wait:%f\n" % wait_time)
-        print 'conflict backoff'
+        print self.memtr.transaction_status + 'status deleted'
 	sleep(wait_time)
 	try:
 	  status, ref_list = self.memtr.mc.gets(other_status)
 	except TypeError:
+          print self.memtr.transaction_status + 'status deleted'
 	  return
 	if status != ACTIVE:
+          print self.memtr.transaction_status + 'aborted'
 	  return
 	if self.count <= 10:
 	  self.count += 1
@@ -341,7 +343,7 @@ class MemTr(object):
 	  self.count = 0
 	  rob_success = self.memtr.mc.cas(other_status, [ABORT, ref_list])
 	  if rob_success:
-            print 'rob success'
+            print self.memtr.transaction_status + 'rob success from '+ other_status
 	    self.memtr.out("robb done from "+str(other_status))
 	    self.memtr.add_def_que(other_status)
             return
