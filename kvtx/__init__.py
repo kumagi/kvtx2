@@ -79,8 +79,6 @@ class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
     #ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+{}:"|;<>?/,.[]=_'
-こあkoa
-
 
     ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890'
 
@@ -344,6 +342,7 @@ class MemTr(object):
 	    self.memtr.out("robb done from "+str(other_status))
 	    self.memtr.add_def_que(other_status)
             return
+
   def set(self, key, value):
     resolver = self.resolver(self)
     if not self.writeset.has_key(key): # add keyname in status for cleanup
