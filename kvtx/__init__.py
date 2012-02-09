@@ -326,7 +326,6 @@ class MemTr(object):
       print self.memtr.transaction_status + 'conflict backoff for' + other_status
       while True:
         wait_time = 0.001 * randint(0, 1 << self.count)
-        print self.memtr.transaction_status + 'status deleted'
 	sleep(wait_time)
 	try:
 	  status, ref_list = self.memtr.mc.gets(other_status)
@@ -347,6 +346,9 @@ class MemTr(object):
 	    self.memtr.out("robb done from "+str(other_status))
 	    self.memtr.add_def_que(other_status)
             return
+          else:
+            print self.memtr.transaction_status + 'rob failed from '+ other_status
+
 
   def set(self, key, value):
     resolver = self.resolver(self)
