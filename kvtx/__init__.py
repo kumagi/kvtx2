@@ -67,6 +67,7 @@ class WrappedClient(object):
         if retry_count <= 10:
           retry_count += 1
         wait_time = 0.001 * randint(0, 1 << retry_count)
+        print 'add fail, retry for sleep'
         sleep(wait_time)
         continue
         #raise ConnectionError
@@ -115,6 +116,7 @@ class MemTr(object):
       try:
         result = self.mc.add(key, value)
       except ConnectionError:
+        print 'add random connection error'
         sleep(0.1)
         continue
       if result == True:
@@ -172,7 +174,7 @@ class MemTr(object):
     #sys.stderr.write(self.transaction_status + " : " + string + "\n")
     try:
       #sys.stderr.write(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
-      print(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
+      #print(str(self.transaction_status) + " wb" + str(self.writeset.size) + " rb" + str(self.readset.size) +" : " + string + "\n")
       pass
     except:
       pass
@@ -324,6 +326,7 @@ class MemTr(object):
       while True:
         wait_time = 0.001 * randint(0, 1 << self.count)
         self.memtr.out("backoff wait:%f\n" % wait_time)
+        print 'conflict backoff'
 	sleep(wait_time)
 	try:
 	  status, ref_list = self.memtr.mc.gets(other_status)
@@ -369,6 +372,7 @@ class MemTr(object):
 	if self.mc.cas_ids.get(key) != None:
 	  self.mc.set(key, [INFLATE, None, tupled_new, self.transaction_status])
           return
+        print 'not exist and failed to add sleep'
 	time.sleep(0.5)
 	continue
       try:
@@ -560,6 +564,7 @@ def rr_transaction(kvs, target_transaction):
 	transaction.add_def_que(transaction.transaction_status)
 	continue
       except ConnectionError:
+        print 'connection error : retry'
         transaction.add_def_que(transaction.transaction_status)
         sleep(0.001 * randint(0, 1 << wait_count))
         if wait_count < 10:
