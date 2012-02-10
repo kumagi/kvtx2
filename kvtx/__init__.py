@@ -46,7 +46,7 @@ def get_deleting_value(old, new, status):
 class WrappedClient(object):
   def __init__(self, *args):
     self.args = args
-    self.mc = Client(*args, cache_cas = True, socket_timeout=1)
+    self.mc = Client(*args, cache_cas = True, socket_timeout=10)
     self.del_que = []
     import threading
   def gets(self, key):
@@ -66,7 +66,7 @@ class WrappedClient(object):
             wait_time = 0.001 * randint(0, 1 << retry_count)
             print 'add fail, retry for sleep'
             sleep(wait_time)
-            self.mc = Client(*self.args, cache_cas = True, socket_timeout=1)
+           self.mc = Client(*self.args, cache_cas = True, socket_timeout=10)
             continue
         #raise ConnectionError
         return result
@@ -83,7 +83,7 @@ class WrappedClient(object):
         print 'add fail, retry for sleep'
         sleep(wait_time)
         print self.args
-        self.mc = Client(*self.args, cache_cas = True, socket_timeout=1)
+        self.mc = Client(*self.args, cache_cas = True, socket_timeout=10)
         continue
         #raise ConnectionError
       return result
