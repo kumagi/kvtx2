@@ -66,7 +66,7 @@ class WrappedClient(object):
             wait_time = 0.001 * randint(0, 1 << retry_count)
             print 'add fail, retry for sleep'
             sleep(wait_time)
-           self.mc = Client(*self.args, cache_cas = True, socket_timeout=10)
+            self.mc = Client(*self.args, cache_cas = True, socket_timeout=10)
             continue
         #raise ConnectionError
         return result
