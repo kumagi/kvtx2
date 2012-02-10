@@ -94,10 +94,8 @@ class WrappedClient(object):
 class MemTr(object):
   """ transaction on memcached """
   def _random_string(self,length):
-    #ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+{}:"|;<>?/,.[]=_'
-
-    ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890'
-
+    ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+{}:"|;<>?/,.[]=_'
+    #ascii_charactor = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890'
     return ''.join(random.choice(ascii_charactor) for _ in xrange(length))
   @classmethod
   def should_indirect(cls, value):
@@ -125,7 +123,7 @@ class MemTr(object):
     else:
       raise Exception("invalid tuple " + str(key_tuple))
   def add_random(self, value):
-    length = 10
+    length = 32
     while 1:
       key = self.prefix + self._random_string(length)
       try:
@@ -137,9 +135,10 @@ class MemTr(object):
       if result == True:
 	return key
       if length < 249 - len(self.prefix):
-        sys.stderr.write("random length is %d\n" % (length,))
+        #sys.stderr.write("random length is %d\n" % (length,))
         length += random.randint(0, 10) == 0
       else:
+        sys.stderr.write("random length is %d.something seems to be wrong\n" % (length,))
         self.random.seed(os.urandom(8))
         self.random.jumpahead(os.getpid())
         length = 10
