@@ -339,12 +339,7 @@ class MemTr(object):
     def __call__(self, other_status):
       print self.memtr.transaction_status + 'conflict backoff for' + other_status
       while True:
-        sleep_count = 0
-        if self.count < 10:
-          sleep_count = self.count
-        else:
-          sleep_count = 10
-        wait_time = 0.001 * randint(0, 1 << sleep_count)
+        wait_time = 0.001 * randint(0, 1 << self.count)
 	sleep(wait_time)
 	try:
 	  status, ref_list = self.memtr.mc.gets(other_status)
@@ -354,7 +349,7 @@ class MemTr(object):
 	if status != ACTIVE:
           print self.memtr.transaction_status + 'aborted'
 	  return
-	if self.count <= 50:
+	if self.count < 10:
 	  self.count += 1
 	  continue
 	else:
